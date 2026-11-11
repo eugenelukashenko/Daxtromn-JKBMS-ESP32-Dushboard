@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Схема підключення: інвертор → MAX3232 → ПК</title>
+<style>
+  :root { --bg:#f5f6f8; --fg:#1c2230; --mut:#5d6678; --card:#fff; --line:#d5d9e2;
+          --tx:#d33a3a; --rx:#2f6fe4; --gnd:#1c2230; --pwr:#e07b18; --warn:#b3261e; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg:#14171f; --fg:#e6e9f0; --mut:#98a1b5; --card:#1d222d; --line:#363d4d;
+          --tx:#ff6b6b; --rx:#6ea1ff; --gnd:#e6e9f0; --pwr:#ffa64d; --warn:#ff8a80; }
+  }
+  body { margin:0; padding:24px 16px; background:var(--bg); color:var(--fg);
+         font:15px/1.5 system-ui, sans-serif; }
+  main { max-width:1100px; margin:0 auto; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  p.sub { color:var(--mut); margin:0 0 20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  svg { width:100%; height:auto; display:block; }
+  svg text { fill:var(--fg); font-family:system-ui, sans-serif; }
+  .box { fill:var(--card); stroke:var(--fg); stroke-width:2; }
+  .pin { fill:var(--card); stroke:var(--fg); stroke-width:1.5; }
+  .lbl { font-size:14px; }
+  .small { font-size:12px; fill:var(--mut); }
+  .title { font-size:16px; font-weight:700; }
+  .w { fill:none; stroke-width:3.5; stroke-linecap:round; stroke-linejoin:round; }
+  .tx { stroke:var(--tx); } .rx { stroke:var(--rx); } .gnd { stroke:var(--gnd); } .pwr { stroke:var(--pwr); }
+  .nc { stroke:var(--mut); stroke-dasharray:4 4; stroke-width:2; fill:none; }
+  table { border-collapse:collapse; width:100%; font-size:14px; }
+  th, td { border-bottom:1px solid var(--line); padding:6px 10px; text-align:left; }
+  th { color:var(--mut); font-weight:600; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; }
+  ul { margin:6px 0 0; padding-left:20px; } li { margin:3px 0; }
+  .warn { color:var(--warn); font-weight:600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Інвертор Daxtromn → MAX3232 → ПК (FT232RL)</h1>
+  <p class="sub">Тестове підключення для визначення протоколу. Рівні ±12,8 В (RS-232) тільки через MAX3232, FT232RL на 3,3 В.</p>
+
+  <div class="card">
+  <svg viewBox="0 0 1060 470" role="img" aria-label="Схема підключення інвертора до ПК через MAX3232 і FT232RL">
+    <!-- INVERTER -->
+    <rect class="box" x="10" y="40" width="210" height="360" rx="10"/>
+    <text class="title" x="115" y="68" text-anchor="middle">Інвертор</text>
+    <text class="small" x="115" y="86" text-anchor="middle">RJ45, RS-232 (±12,8 В)</text>
+    <g class="lbl">
+      <rect class="pin" x="200" y="108" width="40" height="26" rx="4"/><text x="24" y="127">Pin 1  TX інвертора</text><text x="220" y="127" text-anchor="middle" font-size="12">1</text>
+      <rect class="pin" x="200" y="168" width="40" height="26" rx="4"/><text x="24" y="187">Pin 2  RX інвертора</text><text x="220" y="187" text-anchor="middle" font-size="12">2</text>
+      <rect class="pin" x="200" y="228" width="40" height="26" rx="4"/><text x="24" y="247">Pin 8  GND</text><text x="220" y="247" text-anchor="middle" font-size="12">8</text>
+      <rect class="pin" x="200" y="318" width="40" height="26" rx="4"/><text x="24" y="337">Pin 4  +12,8 В</text><text x="220" y="337" text-anchor="middle" font-size="12">4</text>
+    </g>
+    <text class="small" x="24" y="372">Pin 3, 5, 6, 7: не підключені</text>
+
+    <!-- MODULE -->
+    <rect class="box" x="400" y="40" width="270" height="360" rx="10"/>
+    <text class="title" x="535" y="68" text-anchor="middle">Модуль MAX3232</text>
+    <text class="small" x="535" y="86" text-anchor="middle">RS232-бік ← → TTL-бік</text>
+    <text class="small" x="425" y="104" text-anchor="middle">RS232</text>
+    <text class="small" x="645" y="104" text-anchor="middle">TTL 3,3 В</text>
+    <line x1="535" y1="100" x2="535" y2="390" stroke="var(--line)" stroke-width="2" stroke-dasharray="6 6"/>
+    <g class="lbl">
+      <rect class="pin" x="380" y="108" width="40" height="26" rx="4"/><text x="430" y="127">RXD</text>
+      <rect class="pin" x="380" y="168" width="40" height="26" rx="4"/><text x="430" y="187">TXD</text>
+      <rect class="pin" x="380" y="228" width="40" height="26" rx="4"/><text x="430" y="247">−</text>
+      <rect class="pin" x="380" y="288" width="40" height="26" rx="4"/><text x="430" y="307">+</text>
+
+      <rect class="pin" x="650" y="108" width="40" height="26" rx="4"/><text x="640" y="127" text-anchor="end">TXD</text>
+      <rect class="pin" x="650" y="168" width="40" height="26" rx="4"/><text x="640" y="187" text-anchor="end">RXD</text>
+      <rect class="pin" x="650" y="228" width="40" height="26" rx="4"/><text x="640" y="247" text-anchor="end">−</text>
+      <rect class="pin" x="650" y="288" width="40" height="26" rx="4"/><text x="640" y="307" text-anchor="end">+</text>
+    </g>
+    <text class="small" x="535" y="372" text-anchor="middle">пін «+» з обох боків: один і той самий</text>
+    <text class="small" x="535" y="388" text-anchor="middle">живлення модуля (3,3 В)</text>
+
+    <!-- FT232 -->
+    <rect class="box" x="850" y="40" width="200" height="360" rx="10"/>
+    <text class="title" x="950" y="68" text-anchor="middle">FT232RL</text>
+    <text class="small" x="950" y="86" text-anchor="middle">USB-C → ПК, перемичка 3,3 В</text>
+    <g class="lbl">
+      <rect class="pin" x="830" y="108" width="40" height="26" rx="4"/><text x="880" y="127">RXD</text>
+      <rect class="pin" x="830" y="168" width="40" height="26" rx="4"/><text x="880" y="187">TXD</text>
+      <rect class="pin" x="830" y="228" width="40" height="26" rx="4"/><text x="880" y="247">GND</text>
+      <rect class="pin" x="830" y="288" width="40" height="26" rx="4"/><text x="880" y="307">3V3</text>
+    </g>
+
+    <!-- WIRES inverter -> module (RS232) -->
+    <path class="w tx"  d="M240 121 H380"/>
+    <path class="w rx"  d="M240 181 H380"/>
+    <path class="w gnd" d="M240 241 H380"/>
+    <text class="small" x="310" y="113" text-anchor="middle">TX → RXD</text>
+    <text class="small" x="310" y="173" text-anchor="middle">RXD ← TX</text>
+    <text class="small" x="310" y="233" text-anchor="middle">GND</text>
+    <!-- Pin 4: not connected -->
+    <path class="nc" d="M240 331 H300"/>
+    <text class="small" x="306" y="335" fill="var(--warn)" style="fill:var(--warn)">не підключати</text>
+
+    <!-- WIRES module (TTL) -> FT232 -->
+    <path class="w tx"  d="M690 121 H830"/>
+    <path class="w rx"  d="M690 181 H830"/>
+    <path class="w gnd" d="M690 241 H830"/>
+    <path class="w pwr" d="M690 301 H830"/>
+    <text class="small" x="760" y="113" text-anchor="middle">TXD → RXD</text>
+    <text class="small" x="760" y="173" text-anchor="middle">RXD ← TXD</text>
+    <text class="small" x="760" y="233" text-anchor="middle">GND</text>
+    <text class="small" x="760" y="293" text-anchor="middle">3,3 В</text>
+
+    <!-- legend -->
+    <g class="small" transform="translate(10 432)">
+      <line x1="0" y1="0" x2="28" y2="0" class="w tx"/><text x="36" y="4">сигнал від інвертора</text>
+      <line x1="200" y1="0" x2="228" y2="0" class="w rx"/><text x="236" y="4">сигнал до інвертора</text>
+      <line x1="400" y1="0" x2="428" y2="0" class="w gnd"/><text x="436" y="4">GND</text>
+      <line x1="500" y1="0" x2="528" y2="0" class="w pwr"/><text x="536" y="4">живлення 3,3 В</text>
+    </g>
+  </svg>
+  </div>
+
+  <div class="card">
+    <table>
+      <tr><th>З</th><th>На</th><th>Сигнал</th></tr>
+      <tr><td>Інвертор Pin 1</td><td>модуль, RS232-бік RXD</td><td><span class="dot" style="background:var(--tx)"></span>TX інвертора → модуль</td></tr>
+      <tr><td>Інвертор Pin 2</td><td>модуль, RS232-бік TXD</td><td><span class="dot" style="background:var(--rx)"></span>модуль → RX інвертора</td></tr>
+      <tr><td>Інвертор Pin 8</td><td>модуль «−» і FT232 GND</td><td><span class="dot" style="background:var(--gnd)"></span>спільна земля</td></tr>
+      <tr><td>Модуль, TTL-бік TXD</td><td>FT232 RXD</td><td><span class="dot" style="background:var(--tx)"></span>дані від інвертора на ПК</td></tr>
+      <tr><td>Модуль, TTL-бік RXD</td><td>FT232 TXD</td><td><span class="dot" style="background:var(--rx)"></span>команди з ПК</td></tr>
+      <tr><td>FT232 3V3</td><td>модуль «+»</td><td><span class="dot" style="background:var(--pwr)"></span>живлення модуля</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <strong>Перед увімкненням</strong>
+    <ul>
+      <li class="warn">Модуль живити тільки від 3,3 В. Pin 4 (+12,8 В) не підключати ні до модуля, ні до FT232.</li>
+      <li>Перемичка FT232RL на 3,3 В. На RS232-піні TXD модуля у спокої має бути від'ємна напруга (≈ −5…−10 В).</li>
+      <li>Підписи RXD/TXD на модулі подані з боку модуля. Якщо відповіді немає, поміняйте місцями дроти RXD/TXD (безпечно).</li>
+      <li>Pin 8 може бути гальванічно відв'язаний від батареї інвертора: не з'єднуйте його з іншою землею.</li>
+      <li>Запуск тесту: <code>python3 probe_protocol.py /dev/ttyUSB0</code> (2400 і 9600 бод, 8N1).</li>
+    </ul>
+  </div>
+</main>
+</body>
+</html>

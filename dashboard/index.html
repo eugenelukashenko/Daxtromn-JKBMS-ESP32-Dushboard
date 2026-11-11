@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="uk"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Батарея та інвертор</title>
+<style>
+:root{--bg:#0f1419;--card:#18202a;--line:#263241;--tx:#e6edf3;--mut:#8b98a5;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--acc:#58a6ff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,sans-serif}
+header{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 18px;border-bottom:1px solid var(--line)}
+h1{font-size:17px;margin:0;font-weight:600}
+h3{margin:0;font-size:13px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;grid-column:1/-1;padding-top:6px}
+.pill{padding:3px 10px;border-radius:99px;font-size:12px;background:var(--line);color:var(--mut)}
+.pill.ok{background:#12351b;color:var(--ok)}.pill.bad{background:#3d1517;color:var(--bad)}.pill.warn{background:#3a2d0c;color:var(--warn)}
+main{max-width:1100px;margin:0 auto;padding:16px;display:grid;gap:14px;grid-template-columns:repeat(5,1fr)}
+.c3{grid-column:span 3}
+@media(max-width:1000px){main{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}.c3{grid-column:1/-1}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+.card h2{margin:0 0 6px;font-size:12px;font-weight:500;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.big{font-size:32px;font-weight:600;font-variant-numeric:tabular-nums}
+.big small{font-size:15px;color:var(--mut);font-weight:400;margin-left:3px}
+.sub{color:var(--mut);font-size:13px;margin-top:2px}
+.sub b{color:var(--tx);font-weight:500}
+.wide{grid-column:1/-1}
+.bar{height:10px;border-radius:5px;background:var(--line);overflow:hidden;margin-top:10px}
+.bar>i{display:block;height:100%;background:var(--ok);width:0;transition:width .5s}
+.cells{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0 6px}
+.bat{width:60px;text-align:center}
+.bat .nub{width:22px;height:7px;margin:0 auto;background:var(--mut);border-radius:3px 3px 0 0}
+.bat .body{position:relative;height:104px;border:2px solid var(--mut);border-radius:8px;overflow:hidden;background:#101820}
+.bat .body i{position:absolute;left:0;right:0;bottom:0;background:var(--acc);transition:height .5s}
+.bat.max .body i{background:var(--warn)}.bat.min .body i{background:var(--bad)}
+.bat .body b{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;text-shadow:0 0 3px #000,0 0 3px #000}
+.bat span{display:block;margin-top:4px;font-size:11px;color:var(--mut)}
+.row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border:0}.row b{font-variant-numeric:tabular-nums;font-weight:500}
+canvas{width:100%;display:block}
+#c_g{height:150px}#c_s{height:280px}#c_p{height:400px}
+.leg{font-size:12px;color:var(--mut);margin:2px 0 6px}.leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 12px;vertical-align:-1px}.leg i:first-child{margin-left:0}
+.rng button{background:var(--line);color:var(--tx);border:0;border-radius:6px;padding:4px 10px;margin-left:4px;cursor:pointer;font-size:12px}
+.rng button.on{background:var(--acc);color:#04111f}
+.stale{opacity:.45}
+</style></head><body>
+<header><h1>Батарея та інвертор</h1>
+<div><span id="mqtt" class="pill">MQTT...</span> <span id="upd" class="pill">–</span></div></header>
+<main>
+<h3>Батарея (BMS)</h3>
+<div class="card" id="g_bms"><h2>Заряд (SOC)</h2><div class="big"><span id="soc">–</span><small>%</small></div>
+<div class="bar"><i id="socb"></i></div><div class="sub"><span id="rem">–</span> / <span id="nom">–</span> А·год · SOH <span id="soh">–</span>%</div></div>
+<div class="card" id="g_bms2"><h2>Напруга</h2><div class="big"><span id="bv">–</span><small>В</small></div><div class="sub">комірка сер. <span id="avg">–</span> В</div></div>
+<div class="card" id="g_bms3"><h2>Струм BMS</h2><div class="big"><span id="bi">–</span><small>А</small></div><div class="sub" id="bdir">–</div></div>
+<div class="card" id="g_bms4"><h2>Потужність BMS</h2><div class="big"><span id="bp">–</span><small>Вт</small></div><div class="sub">цикли <span id="cyc">–</span></div></div>
+<div class="card" id="g_time"><h2 id="tl_t">Час роботи</h2><div class="big" id="tl_v" style="font-size:26px">–</div><div class="sub" id="tl_s">–</div></div>
+<div class="card c3" id="g_cells"><h2>Комірки</h2><div class="cells" id="cells"></div>
+<div class="sub">Мін.: <b id="cmin">–</b> В · Макс.: <b id="cmax">–</b> В · різниця <b id="delta">–</b> мВ</div></div>
+<div class="card" id="g_t"><h2>Температура BMS</h2>
+<div class="row"><span>MOS</span><b id="tm">–</b></div><div class="row"><span>Датчик 1</span><b id="t1">–</b></div><div class="row"><span>Датчик 2</span><b id="t2">–</b></div></div>
+<div class="card" id="g_s"><h2>Стан BMS</h2>
+<div class="row"><span>MOS заряду</span><b id="cm">–</b></div><div class="row"><span>MOS розряду</span><b id="dm">–</b></div><div class="row"><span>Балансування</span><b id="bal">–</b></div></div>
+
+<h3>Інвертор</h3>
+<div class="card" id="g_mode"><h2>Живлення</h2><div class="big" id="mode" style="font-size:26px">–</div><div class="sub" id="modesub">–</div></div>
+<div class="card" id="g_load"><h2>Навантаження</h2><div class="big"><span id="ow">–</span><small>Вт</small></div><div class="sub"><span id="ova">–</span> ВА · <span id="lp">–</span>%</div></div>
+<div class="card" id="g_out"><h2>Вихід</h2><div class="big"><span id="ov">–</span><small>В</small></div><div class="sub"><span id="ohz">–</span> Гц</div></div>
+<div class="card" id="g_grid"><h2>Мережа</h2><div class="big"><span id="gv">–</span><small>В</small></div><div class="sub"><span id="ghz">–</span> Гц</div></div>
+<div class="card" id="g_gday"><h2>Мережа: сьогодні</h2><div class="big" style="font-size:24px"><span id="gd_on">–</span></div><div class="sub">є мережа · немає: <b id="gd_off">–</b><span id="gd_unk"></span></div></div>
+<div class="card" id="g_gmon"><h2>Мережа: цей місяць</h2><div class="big" style="font-size:24px"><span id="gm_on">–</span></div><div class="sub">є мережа · немає: <b id="gm_off">–</b><span id="gm_unk"></span></div><div class="sub"><b id="gm_pct">–</b>% часу з мережею</div></div>
+<div class="card" id="g_pv"><h2>Сонячні панелі</h2><div class="big"><span id="pw">–</span><small>Вт</small></div><div class="sub"><span id="pvv">–</span> В · <span id="pva">–</span> А</div></div>
+<div class="card" id="g_ib"><h2>Акумулятор (за інвертором)</h2><div class="big"><span id="iv">–</span><small>В</small></div><div class="sub"><span id="ipct">–</span>% · заряд <span id="ichg">–</span> А · розряд <span id="idis">–</span> А</div></div>
+<div class="card" id="g_it"><h2>Інвертор</h2>
+<div class="row"><span>Шина</span><b id="bus">–</b></div><div class="row"><span>Температура</span><b id="it">–</b></div></div>
+
+<h3>Графіки за сьогодні (00:00 – 24:00)</h3>
+<div class="card wide"><h2>Мережа <span id="grng" class="rng" style="float:right"><button data-m="day" class="on">Доба</button><button data-m="month">Місяць</button></span></h2><div class="leg" id="gleg"></div><canvas id="c_g"></canvas></div>
+<div class="card wide"><h2>Заряд SOC, %</h2><canvas id="c_s"></canvas></div>
+<div class="card wide"><h2>Потужність, Вт</h2><div class="leg" id="pleg"></div><canvas id="c_p"></canvas></div>
+</main>
+<script src="mqtt.min.js"></script>
+<script src="config.js"></script>
+<script>
+const $=id=>document.getElementById(id), C=window.CFG;
+const T={}, TS={};
+let ema=null;                 // згладжений струм BMS (для часу роботи)
+let lim={ovp:3650,uvp:2600};
+const B=k=>T[C.bmsBase+'/state/'+k], I=k=>T[C.invBase+'/'+k];
+const num=v=>v===undefined?NaN:parseFloat(v);
+const set=(id,v,d=0)=>{$(id).textContent=(typeof v==='number'&&!isNaN(v))?v.toFixed(d):'–'};
+const age=t=>Date.now()-(TS[t]||0);
+const fresh=(t,ms=30000)=>TS[t]&&age(t)<ms;
+const pad=n=>String(n).padStart(2,'0');
+
+// ---- облік на сервері (/api/grid, /api/series) ----
+let G={rows:[],ok:false}, S={ok:false,prev:null,events:[],samples:[]};
+const hmin=sec=>{const m=Math.round(sec/60);return Math.floor(m/60)+' год '+pad(m%60)+' хв'};
+function gsum(from,to){let on=0,off=0,unk=0;for(const r of G.rows)if(r[0]>=from&&r[0]<to){on+=r[1];off+=r[2];unk+=r[3]}return[on,off,unk]}
+function dayStart(){const n=new Date();return{d0:Math.floor(new Date(n.getFullYear(),n.getMonth(),n.getDate()).getTime()/1000),m0:Math.floor(new Date(n.getFullYear(),n.getMonth(),1).getTime()/1000)}}
+async function loadGrid(){try{const r=await(await fetch('/api/grid?days=62')).json();G.rows=r.rows;G.ok=true}catch(e){G.ok=false}gridCards();charts()}
+async function loadSeries(){const {d0}=dayStart();
+try{const r=await(await fetch('/api/series?from='+d0+'&to='+(d0+86400))).json();S={ok:true,prev:r.prev,events:r.events,samples:r.samples}}catch(e){S.ok=false}charts()}
+function gridCards(){
+if(!G.ok){['gd_on','gd_off','gm_on','gm_off','gm_pct'].forEach(i=>$(i).textContent='–');return}
+const {d0,m0}=dayStart();const d=gsum(d0,d0+86400),m=gsum(m0,4e9);
+$('gd_on').textContent=hmin(d[0]);$('gd_off').textContent=hmin(d[1]);$('gd_unk').textContent=d[2]>300?' · без даних: '+hmin(d[2]):'';
+$('gm_on').textContent=hmin(m[0]);$('gm_off').textContent=hmin(m[1]);$('gm_unk').textContent=m[2]>300?' · без даних: '+hmin(m[2]):'';
+const known=m[0]+m[1];$('gm_pct').textContent=known>0?(m[0]/known*100).toFixed(1):'–'}
+
+// ---- графіки: доба 00:00–24:00, крок осі X 1 година ----
+function dayChart(id,o){
+const c=$(id),dpr=window.devicePixelRatio||1,W=c.clientWidth,H=c.clientHeight;
+c.width=W*dpr;c.height=H*dpr;const x=c.getContext('2d');x.scale(dpr,dpr);
+const {d0}=dayStart(),d1=d0+86400,now=Date.now()/1000;
+const L=o.left||54,R=14,Tp=10,Bm=28,pw=W-L-R,ph=H-Tp-Bm;
+const X=t=>L+(t-d0)/86400*pw,Y=v=>Tp+ph-(v-o.ymin)/(o.ymax-o.ymin)*ph;
+x.lineWidth=1;x.font='10px sans-serif';
+for(let t=d0;t<=d1;t+=3600){const px=X(t);
+ x.strokeStyle='#2f3d50';x.beginPath();x.moveTo(px,Tp);x.lineTo(px,Tp+ph);x.stroke();
+ const dt=new Date(t*1000);x.fillStyle='#8b98a5';x.textAlign='center';
+ x.fillText(t===d1?'24:00':pad(dt.getHours())+':'+pad(dt.getMinutes()),px,Tp+ph+16)}
+for(const v of o.yticks){const y=Y(v);x.strokeStyle=o.yminor&&o.yminor(v)?'#1f2a38':'#2f3d50';x.beginPath();x.moveTo(L,y);x.lineTo(W-R,y);x.stroke();
+ x.fillStyle='#8b98a5';x.textAlign='right';x.fillText(o.yfmt?o.yfmt(v):v,L-6,y+3)}
+if(o.hline){const y=Y(o.hline.v);x.strokeStyle='#f85149';x.lineWidth=1.5;x.setLineDash([6,4]);x.beginPath();x.moveTo(L,y);x.lineTo(W-R,y);x.stroke();x.setLineDash([]);x.fillStyle='#f85149';x.textAlign='left';x.font='11px sans-serif';x.fillText(o.hline.label,L+8,y+14);x.font='10px sans-serif';x.lineWidth=1}
+if(now>d0&&now<d1){x.strokeStyle='#58a6ff55';x.setLineDash([4,4]);x.beginPath();x.moveTo(X(now),Tp);x.lineTo(X(now),Tp+ph);x.stroke();x.setLineDash([])}
+let any=false;x.lineWidth=o.lw||2;
+for(const s of o.series){x.strokeStyle=s.color;x.beginPath();let pen=false,prev=0;
+ for(const p of s.pts){if(p===null||p[1]===null||p[1]===undefined){pen=false;continue}
+  const px=X(p[0]),py=Y(Math.max(o.ymin,Math.min(o.ymax,p[1])));
+  if(!pen||p[0]-prev>(o.gap||300)){x.moveTo(px,py);pen=true}else x.lineTo(px,py);prev=p[0];any=true}
+ x.stroke()}
+if(o.segs){x.strokeStyle='#3fb950';x.lineWidth=3;x.beginPath();let cur=null,py=0;
+ for(const [t0,t1,st] of o.segs){if(st!=='on'&&st!=='off'){cur=null;continue}
+  const y=Y(st==='on'?1:0),a=X(t0),b=X(t1);
+  if(cur!==null&&Math.abs(cur-t0)<2){x.lineTo(a,y)}else x.moveTo(a,y);
+  x.lineTo(b,y);cur=t1;py=y;any=true}x.stroke()}
+if(!any){x.fillStyle='#8b98a5';x.textAlign='left';x.font='12px sans-serif';x.fillText(S.ok?'Даних за сьогодні поки немає':'Сервіс обліку недоступний (/api/series)',L+10,Tp+24)}}
+function gridSegs(){const {d0}=dayStart(),now=Math.min(Date.now()/1000,d0+86400);let cur=S.prev,t=d0;const segs=[];
+for(const [ts,st] of S.events){if(ts>t){segs.push([t,Math.min(ts,now),cur]);t=ts}cur=st}
+if(now>t)segs.push([t,now,cur]);return segs}
+let gmode='day';
+function monthChart(id){
+const c=$(id),dpr=window.devicePixelRatio||1,W=c.clientWidth,H=c.clientHeight;
+c.width=W*dpr;c.height=H*dpr;const x=c.getContext('2d');x.scale(dpr,dpr);
+const n=new Date(),y0=n.getFullYear(),mo=n.getMonth(),dim=new Date(y0,mo+1,0).getDate(),today=n.getDate();
+const L=44,R=14,Tp=10,Bm=26,pw=W-L-R,ph=H-Tp-Bm,X=k=>L+(k-1)/(dim-1)*pw,Y=v=>Tp+ph-v/24*ph;
+x.font='10px sans-serif';x.lineWidth=1;
+for(let v=0;v<=24;v+=2){x.strokeStyle='#2f3d50';x.beginPath();x.moveTo(L,Y(v));x.lineTo(W-R,Y(v));x.stroke();x.fillStyle='#8b98a5';x.textAlign='right';x.fillText(v+' г',L-6,Y(v)+3)}
+for(let k=1;k<=dim;k++){x.strokeStyle='#1f2a38';x.beginPath();x.moveTo(X(k),Tp);x.lineTo(X(k),Tp+ph);x.stroke();x.fillStyle=k===today?'#58a6ff':'#8b98a5';x.textAlign='center';x.fillText(k,X(k),H-9)}
+const pts=[];
+for(let k=1;k<=dim;k++){const a=Math.floor(new Date(y0,mo,k).getTime()/1000),b=Math.floor(new Date(y0,mo,k+1).getTime()/1000),r=gsum(a,b);
+ pts.push([k,(r[0]+r[1]+r[2])>0?r[0]/3600:null])}
+if(!G.ok||!pts.some(p=>p[1]!==null)){x.fillStyle='#8b98a5';x.textAlign='left';x.font='12px sans-serif';x.fillText(G.ok?'Даних за цей місяць поки немає':'Сервіс обліку недоступний (/api/grid)',L+10,Tp+24);return}
+x.strokeStyle='#3fb950';x.fillStyle='#3fb950';x.lineWidth=2;x.beginPath();let pen=false;
+for(const[k,v]of pts){if(v===null){pen=false;continue}pen?x.lineTo(X(k),Y(v)):x.moveTo(X(k),Y(v));pen=true}x.stroke();
+for(const[k,v]of pts){if(v===null)continue;x.beginPath();x.arc(X(k),Y(v),3.5,0,7);if(k===today){x.fillStyle='#18202a';x.fill();x.stroke()}else{x.fillStyle='#3fb950';x.fill()}}}
+const ser=(i,f)=>S.samples.map(r=>[r[0],r[i]===null||r[i]===undefined?null:f(r[i])]);
+const kwh=(i,f)=>{let t=0;for(const r of S.samples)if(r[i]!==null&&r[i]!==undefined)t+=f(r[i]);return t/60000};
+function charts(){
+const m=new Date().toLocaleDateString('uk',{month:'long',year:'numeric'});
+if(gmode==='day'){$('gleg').innerHTML='<i style="background:#3fb950"></i>1 — мережа є, 0 — мережі немає';
+ dayChart('c_g',{ymin:0,ymax:1,yticks:[0,1],yfmt:v=>v,series:[],segs:S.ok?gridSegs():null,left:36})}
+else{$('gleg').innerHTML='<i style="background:#3fb950"></i>годин із мережею за добу, '+m+' <span style="opacity:.7">· порожній кружок — сьогодні, доба ще не закінчилась</span>';monthChart('c_g')}
+dayChart('c_s',{ymin:0,ymax:100,yticks:[0,10,20,30,40,50,60,70,80,90,100],yfmt:v=>v+'%',series:[{color:'#3fb950',pts:ser(1,v=>v)}]});
+const yt=[];for(let v=0;v<=3200;v+=500)yt.push(v);
+const f=v=>v.toFixed(1);
+$('pleg').innerHTML='<i style="background:#58a6ff"></i>навантаження ('+f(kwh(2,v=>v))+' кВт·год)'
+ +'<i style="background:#d29922"></i>сонячні панелі ('+f(kwh(3,v=>v))+' кВт·год)'
+ +'<i style="background:#f0883e"></i>віддає батарея ('+f(kwh(4,v=>v<0?-v:0))+' кВт·год)'
+ +'<i style="background:#3fb950"></i>заряд батареї ('+f(kwh(4,v=>v>0?v:0))+' кВт·год)'
+ +'<i style="background:#f85149"></i>номінал інвертора 3.2 кВт <span style="opacity:.7">· енергія за сьогодні</span>';
+dayChart('c_p',{ymin:0,ymax:3200,yticks:yt,hline:{v:3200,label:'3.2 кВт — номінальна потужність інвертора'},
+ series:[{color:'#58a6ff',pts:ser(2,v=>v)},{color:'#d29922',pts:ser(3,v=>v)},{color:'#f0883e',pts:ser(4,v=>v<0?-v:0)},{color:'#3fb950',pts:ser(4,v=>v>0?v:0)}]})}
+document.querySelectorAll('#grng button').forEach(b=>b.onclick=()=>{gmode=b.dataset.m;
+document.querySelectorAll('#grng button').forEach(x=>x.classList.toggle('on',x===b));charts()});
+
+// ---- відображення ----
+const onoff=v=>v==1?'увімк.':v==0?'вимк.':'–';
+function render(){
+const bOk=fresh(C.bmsBase+'/state/voltage');
+['g_bms','g_bms2','g_bms3','g_bms4','g_time','g_cells','g_t','g_s'].forEach(i=>$(i).classList.toggle('stale',!bOk));
+const sc=num(B('soc'));set('soc',sc);$('socb').style.width=(isNaN(sc)?0:sc)+'%';
+$('socb').style.background=sc<20?'var(--bad)':sc<40?'var(--warn)':'var(--ok)';
+set('rem',num(B('remaining_ah')),1);set('nom',num(B('nominal_ah')));set('soh',num(B('soh')));
+set('bv',num(B('voltage')),2);set('avg',num(B('cell_avg')),3);
+const bi=num(B('current'));set('bi',bi,2);
+{const cur=ema===null?bi:ema,rem=num(B('remaining_ah')),nom=num(B('nominal_ah')),sc2=num(B('soc'));
+ const fmt=h=>{if(h>99)return'> 99 год';const m=Math.round(h*60);return Math.floor(m/60)+' год '+pad(m%60)+' хв'};
+ let t='Час роботи',v='–',sub='батарея в спокої';
+ if(!isNaN(cur)&&!isNaN(rem)&&!isNaN(nom)&&rem<=nom*1.1){
+  if(cur<-0.3){v=fmt(rem/(-cur));sub='до розряду при струмі '+(-cur).toFixed(1)+' А'}
+  else if(cur>0.3){t='Час до заряду';if(sc2>=100||nom-rem<=0.05){v='Заряджено';sub='100%'}else{v=fmt((nom-rem)/cur);sub='до повного заряду при струмі '+cur.toFixed(1)+' А'}}
+  else if(sc2>=100){v='Заряджено';sub='100%, струм ≈ 0'}}
+ $('tl_t').textContent=t;$('tl_v').textContent=v;$('tl_s').textContent=sub}
+$('bdir').textContent=isNaN(bi)?'–':bi<-.05?'розряд':bi>.05?'заряд':'спокій';
+set('bp',num(B('power')),0);set('cyc',num(B('cycles')));
+for(const [id,k] of [['tm','t_mos'],['t1','t1'],['t2','t2']]){const v=num(B(k));$(id).textContent=isNaN(v)?'–':v.toFixed(1)+' °C'}
+$('cm').textContent=onoff(B('charge_mos'));$('dm').textContent=onoff(B('discharge_mos'));
+$('bal').textContent=B('balancing')==1?'йде':B('balancing')==0?'вимк.':'–';
+set('delta',num(B('cell_delta'))*1000);
+// комірки у вигляді батарейок (носик вгору)
+const n=num(B('cells_count')),mx=num(B('cell_max')),mn=num(B('cell_min'));let hs='',imx=0,imn=0;
+for(let k=1;k<=n;k++){const v=num(B('cell'+k));if(isNaN(v))continue;if(!imx&&v===mx)imx=k;if(!imn&&v===mn)imn=k;
+const pct=Math.max(3,Math.min(100,(v-lim.uvp/1000)/((lim.ovp-lim.uvp)/1000)*100));
+hs+='<div class="bat'+(k===imx&&mx!==mn?' max':'')+(k===imn&&mx!==mn?' min':'')+'"><div class="nub"></div><div class="body"><i style="height:'+pct+'%"></i><b>'+v.toFixed(3)+'</b></div><span>№'+k+'</span></div>'}
+$('cells').innerHTML=hs;
+$('cmin').textContent=isNaN(mn)?'–':mn.toFixed(3)+(imn?' (№'+imn+')':'');
+$('cmax').textContent=isNaN(mx)?'–':mx.toFixed(3)+(imx?' (№'+imx+')':'');
+// інвертор
+const iOk=fresh(C.invBase+'/out_w',60000);
+['g_mode','g_load','g_out','g_grid','g_pv','g_ib','g_it'].forEach(i=>$(i).classList.toggle('stale',!iOk));
+set('ow',num(I('out_w')));set('ova',num(I('out_va')));set('lp',num(I('load_pct')));
+set('ov',num(I('out_v')),1);set('ohz',num(I('out_hz')),1);
+set('gv',num(I('grid_v')),1);set('ghz',num(I('grid_hz')),1);
+set('pw',num(I('pv_w')));set('pvv',num(I('pv_v')),1);set('pva',num(I('pv_a')),1);
+set('iv',num(I('batt_v')),2);set('ipct',num(I('batt_pct')));set('ichg',num(I('batt_chg_a')),1);set('idis',num(I('batt_dis_a')),1);
+$('bus').textContent=isNaN(num(I('bus_v')))?'–':num(I('bus_v')).toFixed(0)+' В';
+$('it').textContent=isNaN(num(I('temp_c')))?'–':num(I('temp_c')).toFixed(0)+' °C';
+const gv=num(I('grid_v')),ghz=num(I('grid_hz')),pv=num(I('pv_w')),dis=num(I('batt_dis_a'));
+if(!isNaN(gv)){const grid=gv>80&&ghz>40;let m=grid?'Мережа':'Батарея';
+if(pv>20)m=grid?'Мережа + сонце':'Сонце + батарея';
+$('mode').textContent=m;$('mode').style.color=grid?'var(--ok)':'var(--warn)';
+$('modesub').textContent=grid?'є напруга в мережі':'мережі немає, розряд '+(isNaN(dis)?'–':dis.toFixed(1))+' А'}
+const ms=$('mqtt'),up=window._mq&&window._mq.connected;ms.textContent=up?'MQTT підключено':'MQTT немає зв\'язку';ms.className='pill '+(up?'ok':'bad');
+const st=T[C.bmsBase+'/status'],u=$('upd');
+u.textContent=bOk?'BMS онлайн':(st==='offline'?'BMS вимкнена':'BMS немає даних');u.className='pill '+(bOk?'ok':'warn')}
+let pend=false;function schedule(){if(pend)return;pend=true;setTimeout(()=>{pend=false;render()},400)}
+
+// ---- MQTT ----
+const mq=mqtt.connect(C.url,{username:C.username,password:C.password,clientId:'dash_'+Math.random().toString(16).slice(2,8),reconnectPeriod:3000,connectTimeout:8000});
+window._mq=mq;
+mq.on('connect',()=>{mq.subscribe([C.bmsBase+'/#',C.invBase+'/#']);schedule()});
+mq.on('close',schedule);mq.on('error',e=>console.error(e));
+// Збиті кадри BMS дають сміття (732 В, 19136 А, SOC 0/122) — такі значення відкидаємо
+const RNG={voltage:[1,120],current:[-300,300],power:[-20000,20000],soc:[1,100],soh:[0,100],remaining_ah:[0,2000],nominal_ah:[1,2000],cells_count:[1,32],t_mos:[-50,150],t1:[-50,150],t2:[-50,150],cell_delta:[0,5]};
+const okv=(k,s)=>{const r=RNG[k]||(/^cell(\d+|_avg|_min|_max)$/.test(k)?[1,5]:null);if(!r)return true;const v=parseFloat(s);return v>=r[0]&&v<=r[1]};
+mq.on('message',(t,m)=>{const s=m.toString();
+if(t.startsWith(C.bmsBase+'/state/')&&!okv(t.slice(C.bmsBase.length+7),s))return;
+T[t]=s;TS[t]=Date.now();
+if(t===C.bmsBase+'/state/current'){const v=parseFloat(s);if(!isNaN(v))ema=ema===null?v:ema*0.9+v*0.1}
+if(t===C.bmsBase+'/settings'){try{const o=JSON.parse(s);if(o.cell_ovp_mv){lim.ovp=o.cell_ovp_mv;lim.uvp=o.cell_uvp_mv}}catch(e){}}
+schedule()});
+loadGrid();loadSeries();setInterval(loadGrid,60000);setInterval(loadSeries,30000);setInterval(render,5000);
+addEventListener('resize',charts);render();
+</script></body></html>

@@ -1,0 +1,8 @@
+# inverter — устройства (ESP32): полный доступ
+user inverter
+topic readwrite #
+
+# dashboard — дашборд и collector: только чтение
+user dashboard
+topic read jkbms/#
+topic read daxtromn/#

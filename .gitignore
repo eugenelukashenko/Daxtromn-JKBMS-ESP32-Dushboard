@@ -1,0 +1,6 @@
+inverter-esp32/config.py
+secrets.h
+config.js
+passwd
+.pio/
+__pycache__/

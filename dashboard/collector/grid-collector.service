@@ -1,0 +1,16 @@
+[Unit]
+Description=Облік наявності мережі (MQTT -> SQLite -> HTTP)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/grid-collector.env
+ExecStart=/usr/bin/python3 /opt/grid-collector/grid_collector.py
+Restart=always
+RestartSec=5
+User=gridcol
+StateDirectory=grid-collector
+# StateDirectory створює /var/lib/grid-collector з правами для користувача сервісу
+
+[Install]
+WantedBy=multi-user.target
