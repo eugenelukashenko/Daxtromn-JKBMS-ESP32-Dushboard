@@ -77,7 +77,7 @@ HTTP (только 127.0.0.1:8090, дальше проксирует nginx `/api
 ```bash
 apt install python3-paho-mqtt
 useradd --system --no-create-home --shell /usr/sbin/nologin gridcol
-mkdir -p /opt/grid-collector && cp collector/grid_collector.py /opt/grid-collector/
+mkdir -p /opt/grid-collector && cp collector/grid_collector.py collector/alerts.py /opt/grid-collector/
 cp collector/grid-collector.env.example /etc/grid-collector.env && chmod 600 /etc/grid-collector.env
 cp collector/grid-collector.service /etc/systemd/system/
 systemctl daemon-reload && systemctl enable --now grid-collector
@@ -85,12 +85,27 @@ systemctl daemon-reload && systemctl enable --now grid-collector
 
 Обновление (новая версия сервиса и страницы):
 ```bash
-cp collector/grid_collector.py /opt/grid-collector/ && systemctl restart grid-collector
+cp collector/grid_collector.py collector/alerts.py /opt/grid-collector/ && systemctl restart grid-collector
 cp index.html config.js /var/www/dashboard/
 curl -s "http://127.0.0.1:8090/api/series?from=$(date -d 'today 00:00' +%s)" | head -c 300
 ```
 Новые таблицы и колонки создаются сервисом сами (в том числе миграция старой таблицы `samples`), накопленные счётчики сохраняются. График SOC и нагрузки начнёт заполняться
 с момента запуска новой версии. Тест логики: `python3 collector/test_collector.py`.
+
+## Тревоги в Telegram
+
+**Тревоги** (`collector/alerts.py`, работают внутри `grid_collector`). Сообщение приходит один раз при возникновении проблемы и один раз при восстановлении:
+сети нет/появилась, SOC ниже 20% и 10% (снимается после подъёма на 5%), напряжение ячейки выше 3,60 В или ниже 2,90 В, дисбаланс ячеек больше 100 мВ,
+перегрев батареи (выше 50 °C) и инвертора (выше 70 °C), нагрузка инвертора выше 90% дольше минуты, нет данных от инвертора или BMS дольше 3 минут.
+Одинаковое сообщение не повторяется чаще, чем раз в 30 минут. Пороги задаются переменными `ALERT_*` (см. `grid-collector.env.example`).
+
+Настройка бота:
+1. В Telegram написать @BotFather: `/newbot`, получить токен.
+2. Написать своему боту любое сообщение, затем открыть `https://api.telegram.org/bot<TOKEN>/getUpdates` и взять `chat.id`.
+3. Вписать `TG_TOKEN` и `TG_CHAT_ID` в `/etc/grid-collector.env` на сервере (в репозитории там `CHANGE_ME`) и выполнить `systemctl restart grid-collector`.
+   При запуске бот пришлёт «Колектор запущено». Без токена тревоги только пишутся в журнал (`journalctl -u grid-collector`).
+
+Тесты: `python3 collector/test_alerts.py` и `python3 collector/test_collector.py`.
 
 ## Ограничения
 

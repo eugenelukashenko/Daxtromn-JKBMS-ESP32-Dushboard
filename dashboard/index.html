@@ -39,9 +39,18 @@ canvas{width:100%;display:block}
 .rng button{background:var(--line);color:var(--tx);border:0;border-radius:6px;padding:4px 10px;margin-left:4px;cursor:pointer;font-size:12px}
 .rng button.on{background:var(--acc);color:#04111f}
 .stale{opacity:.45}
+.flowwrap{max-width:1100px;margin:14px auto 0;padding:0 16px}.flowwrap .card{max-width:760px;margin:0 auto;padding:8px}
+#flow{width:100%;height:auto;display:block}
+#flow text{font-family:system-ui,sans-serif;fill:var(--tx)}
+.fl{fill:none;stroke:#2f3d50;stroke-width:3;stroke-linecap:round}
+.fl.on{stroke-dasharray:7 9;animation:fdash 1s linear infinite}.fl.rev{animation-direction:reverse}
+@keyframes fdash{to{stroke-dashoffset:-16}}
+
+@media(max-width:600px){main{display:none}.flowwrap{margin-top:8px;padding:0 6px}.flowwrap .card{padding:4px}header{padding:10px 12px}}
 </style></head><body>
 <header><h1>Батарея та інвертор</h1>
 <div><span id="mqtt" class="pill">MQTT...</span> <span id="upd" class="pill">–</span></div></header>
+<div class="flowwrap"><div class="card"><svg id="flow" viewBox="0 0 720 470" role="img" aria-label="Схема потоків енергії"></svg></div></div>
 <main>
 <h3>Батарея (BMS)</h3>
 <div class="card" id="g_bms"><h2>Заряд (SOC)</h2><div class="big"><span id="soc">–</span><small>%</small></div>
@@ -79,6 +88,7 @@ canvas{width:100%;display:block}
 <script>
 const $=id=>document.getElementById(id), C=window.CFG;
 const T={}, TS={};
+const SOC_MIN=10;            // резерв, %: час розряду рахуємо до цього рівня
 let ema=null;                 // згладжений струм BMS (для часу роботи)
 let lim={ovp:3650,uvp:2600};
 const B=k=>T[C.bmsBase+'/state/'+k], I=k=>T[C.invBase+'/'+k];
@@ -109,7 +119,7 @@ const c=$(id),dpr=window.devicePixelRatio||1,W=c.clientWidth,H=c.clientHeight;
 c.width=W*dpr;c.height=H*dpr;const x=c.getContext('2d');x.scale(dpr,dpr);
 const {d0}=dayStart(),d1=d0+86400,now=Date.now()/1000;
 const L=o.left||54,R=14,Tp=10,Bm=28,pw=W-L-R,ph=H-Tp-Bm;
-const X=t=>L+(t-d0)/86400*pw,Y=v=>Tp+ph-(v-o.ymin)/(o.ymax-o.ymin)*ph;
+const X=t=>L+(t-d0)/86400*pw,Y=v=>Tp+ph-(o.ytf?o.ytf(v):(v-o.ymin)/(o.ymax-o.ymin))*ph;
 x.lineWidth=1;x.font='10px sans-serif';
 for(let t=d0;t<=d1;t+=3600){const px=X(t);
  x.strokeStyle='#2f3d50';x.beginPath();x.moveTo(px,Tp);x.lineTo(px,Tp+ph);x.stroke();
@@ -158,14 +168,16 @@ if(gmode==='day'){$('gleg').innerHTML='<i style="background:#3fb950"></i>1 — �
  dayChart('c_g',{ymin:0,ymax:1,yticks:[0,1],yfmt:v=>v,series:[],segs:S.ok?gridSegs():null,left:36})}
 else{$('gleg').innerHTML='<i style="background:#3fb950"></i>годин із мережею за добу, '+m+' <span style="opacity:.7">· порожній кружок — сьогодні, доба ще не закінчилась</span>';monthChart('c_g')}
 dayChart('c_s',{ymin:0,ymax:100,yticks:[0,10,20,30,40,50,60,70,80,90,100],yfmt:v=>v+'%',series:[{color:'#3fb950',pts:ser(1,v=>v)}]});
-const yt=[];for(let v=0;v<=3200;v+=500)yt.push(v);
+// логарифмічна шкала: 0–100 Вт докладно (10 Вт ≈ 0,25 висоти до 100), далі грубо 200…3200
+const PC=10,PM=Math.log10(1+3200/PC),ytf=v=>Math.log10(1+Math.max(0,v)/PC)/PM;
+const yt=[0,10,20,50,100,200,500,1000,2000,3000];
 const f=v=>v.toFixed(1);
 $('pleg').innerHTML='<i style="background:#58a6ff"></i>навантаження ('+f(kwh(2,v=>v))+' кВт·год)'
  +'<i style="background:#d29922"></i>сонячні панелі ('+f(kwh(3,v=>v))+' кВт·год)'
  +'<i style="background:#f0883e"></i>віддає батарея ('+f(kwh(4,v=>v<0?-v:0))+' кВт·год)'
  +'<i style="background:#3fb950"></i>заряд батареї ('+f(kwh(4,v=>v>0?v:0))+' кВт·год)'
- +'<i style="background:#f85149"></i>номінал інвертора 3.2 кВт <span style="opacity:.7">· енергія за сьогодні</span>';
-dayChart('c_p',{ymin:0,ymax:3200,yticks:yt,hline:{v:3200,label:'3.2 кВт — номінальна потужність інвертора'},
+ +'<i style="background:#f85149"></i>номінал інвертора 3.2 кВт <span style="opacity:.7">· енергія за сьогодні · шкала логарифмічна</span>';
+dayChart('c_p',{ymin:0,ymax:3200,ytf:ytf,yticks:yt,hline:{v:3200,label:'3.2 кВт — номінальна потужність інвертора'},
  series:[{color:'#58a6ff',pts:ser(2,v=>v)},{color:'#d29922',pts:ser(3,v=>v)},{color:'#f0883e',pts:ser(4,v=>v<0?-v:0)},{color:'#3fb950',pts:ser(4,v=>v>0?v:0)}]})}
 document.querySelectorAll('#grng button').forEach(b=>b.onclick=()=>{gmode=b.dataset.m;
 document.querySelectorAll('#grng button').forEach(x=>x.classList.toggle('on',x===b));charts()});
@@ -184,7 +196,7 @@ const bi=num(B('current'));set('bi',bi,2);
  const fmt=h=>{if(h>99)return'> 99 год';const m=Math.round(h*60);return Math.floor(m/60)+' год '+pad(m%60)+' хв'};
  let t='Час роботи',v='–',sub='батарея в спокої';
  if(!isNaN(cur)&&!isNaN(rem)&&!isNaN(nom)&&rem<=nom*1.1){
-  if(cur<-0.3){v=fmt(rem/(-cur));sub='до розряду при струмі '+(-cur).toFixed(1)+' А'}
+  if(cur<-0.3){const us=rem-nom*SOC_MIN/100;if(us<=0){v='Резерв';sub='заряд нижче '+SOC_MIN+'%'}else{v=fmt(us/(-cur));sub='до '+SOC_MIN+'% при струмі '+(-cur).toFixed(1)+' А'}}
   else if(cur>0.3){t='Час до заряду';if(sc2>=100||nom-rem<=0.05){v='Заряджено';sub='100%'}else{v=fmt((nom-rem)/cur);sub='до повного заряду при струмі '+cur.toFixed(1)+' А'}}
   else if(sc2>=100){v='Заряджено';sub='100%, струм ≈ 0'}}
  $('tl_t').textContent=t;$('tl_v').textContent=v;$('tl_s').textContent=sub}
@@ -218,8 +230,148 @@ if(pv>20)m=grid?'Мережа + сонце':'Сонце + батарея';
 $('mode').textContent=m;$('mode').style.color=grid?'var(--ok)':'var(--warn)';
 $('modesub').textContent=grid?'є напруга в мережі':'мережі немає, розряд '+(isNaN(dis)?'–':dis.toFixed(1))+' А'}
 const ms=$('mqtt'),up=window._mq&&window._mq.connected;ms.textContent=up?'MQTT підключено':'MQTT немає зв\'язку';ms.className='pill '+(up?'ok':'bad');
+flowRender();
 const st=T[C.bmsBase+'/status'],u=$('upd');
 u.textContent=bOk?'BMS онлайн':(st==='offline'?'BMS вимкнена':'BMS немає даних');u.className='pill '+(bOk?'ok':'warn')}
+
+// ---- пікторграма потоків енергії ----
+const FLOW_MAX=4000;                       // Вт, кінець шкали кілець (сонце, мережа, навантаження)
+const FMAX={pv:FLOW_MAX,grid:FLOW_MAX,load:FLOW_MAX,bat:FLOW_MAX};   // для батареї перераховується: ємність × напруга (1C)
+const fAng=(a)=>a*Math.PI/180;
+function fArc(cx,cy,r,a0,a1){const x0=cx+r*Math.cos(fAng(a0)),y0=cy+r*Math.sin(fAng(a0)),x1=cx+r*Math.cos(fAng(a1)),y1=cy+r*Math.sin(fAng(a1));
+ return 'M'+x0.toFixed(1)+','+y0.toFixed(1)+' A'+r+','+r+' 0 '+((a1-a0)>180?1:0)+' 1 '+x1.toFixed(1)+','+y1.toFixed(1)}
+const FN={pv:{cx:110,cy:100,name:'Сонячні панелі',col:'#d29922'},grid:{cx:610,cy:100,name:'Мережа',col:'#8b98a5'},
+ bat:{cx:110,cy:330,name:'Акумулятор',col:'#3fb950'},load:{cx:610,cy:330,name:'Навантаження',col:'#58a6ff'}};
+const FICON={
+ pv:'<circle cx="-11" cy="-13" r="4" fill="#d29922"/><path d="M-15,9 L-9,-7 H15 L9,9 Z" fill="#1d3b63" stroke="#58a6ff" stroke-width="1.5"/><path d="M-12,1 H12 M-3,-7 L-6,9 M5,-7 L2,9" stroke="#58a6ff" stroke-width="1"/>',
+ grid:'<path d="M0,-17 L-9,15 M0,-17 L9,15 M-5,-3 H5 M-8,6 H8 M-12,-8 H12 M-4,-8 L4,-3 M4,-8 L-4,-3 M-6,6 L6,15 M6,6 L-6,15" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/>',
+ bat:'<rect x="-15" y="-9" width="27" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><rect x="12" y="-3.5" width="3.5" height="7" rx="1" fill="currentColor"/><rect id="bfill" x="-12.5" y="-6.5" width="0" height="13" rx="1.5" fill="currentColor"/>',
+ load:'<path d="M-15,3 L0,-12 L15,3 H11 V15 H-11 V3 Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><rect x="-3" y="5" width="6" height="10" fill="currentColor"/>'};
+// дві розкладки схеми: ПК (широка) і телефон (вузька, кола 2×2); вибір за шириною екрана
+const LAY={
+ desk:{vb:'0 0 720 470',fn:{pv:[110,100],grid:[610,100],bat:[110,330],load:[610,330]},
+  P:{pv:'M170,100 H255 V205 H308',grid:'M550,100 H465 V205 H412',bat:'M170,330 H255 V235 H308',load:'M412,235 H465 V330 H550'},
+  c:[360,220],clk:[360,40],wx:[360,392],gx:[505,96,505,70],
+  AF:{pv:[.17,.89],grid:[.17,.89],bat:[.18,.89],load:[.11,.82]}},
+ mob:{vb:'0 0 400 630',fn:{pv:[90,150],grid:[310,150],bat:[90,480],load:[310,480]},
+  P:{pv:'M150,150 V316',grid:'M250,150 V316',bat:'M150,480 V344',load:'M250,344 V480'},
+  c:[200,330],clk:[200,34],wx:[200,565],gx:[250,235,310,92],
+  AF:{pv:[.4,.82],grid:[.4,.82],bat:[.3,.72],load:[.3,.72]}}};
+const mqMob=matchMedia('(max-width:600px)');
+let AFR=LAY.desk.AF;
+function flowInit(){
+ const L=mqMob.matches?LAY.mob:LAY.desk;AFR=L.AF;$('flow').setAttribute('viewBox',L.vb);
+ for(const k in FN){FN[k].cx=L.fn[k][0];FN[k].cy=L.fn[k][1]}
+ const cx0=L.c[0],cy0=L.c[1];
+ let h='';
+ // лінії потоків: від джерела до приймача (напрям анімації)
+ const P=L.P;
+ for(const k in P)h+='<path id="fl_'+k+'" class="fl" d="'+P[k]+'"/>';
+ h+='<g id="gridX" style="display:none"><path d="M'+(L.gx[0]-8)+','+(L.gx[1]-8)+' l16,16 m0,-16 l-16,16" stroke="#f85149" stroke-width="3" stroke-linecap="round"/><text x="'+L.gx[2]+'" y="'+L.gx[3]+'" text-anchor="middle" font-size="13" style="fill:#f85149">Мережі немає</text></g>';
+ // центр
+ h+='<circle cx="'+cx0+'" cy="'+cy0+'" r="52" fill="#101820" stroke="#263241" stroke-width="2"/><circle id="ctr" cx="'+cx0+'" cy="'+cy0+'" r="52" fill="none" stroke="#3fb950" stroke-width="3" opacity=".0"/>'
+  +'<text id="ctrT" x="'+cx0+'" y="'+(cy0+10)+'" text-anchor="middle" font-size="28" font-weight="700" style="fill:#3fb950">–</text>'
+  +'<text x="'+cx0+'" y="'+(cy0+74)+'" text-anchor="middle" font-size="14" font-weight="600" style="fill:#e6edf3">Інвертор</text>'
+  +'<text id="ctrM" x="'+cx0+'" y="'+(cy0+91)+'" text-anchor="middle" font-size="11" style="fill:#8b98a5"></text>'
+  +'<text id="clkT" x="'+L.clk[0]+'" y="'+L.clk[1]+'" text-anchor="middle" font-size="26" font-weight="700"></text>'
+  +'<text id="clkD" x="'+L.clk[0]+'" y="'+(L.clk[1]+21)+'" text-anchor="middle" font-size="13" style="fill:#8b98a5"></text>'
+  +'<g id="wx" transform="translate('+L.wx[0]+','+L.wx[1]+')" style="opacity:.35"><g id="wxI" transform="translate(-26,0)"></g><text id="wxT" x="6" y="8" font-size="24" font-weight="700" style="fill:#e6edf3">–</text></g>';
+ for(const k in P)for(const j of [1,2])h+='<path id="ar_'+k+j+'" d="M-7,-5.5 L6,0 L-7,5.5 Z" style="display:none"/>';
+ for(const k in FN){const n=FN[k];
+  const dy=(k==='grid'||k==='load')?13:0;   // у «Мережа» і «Навантаження» цифри на рядок нижче
+  h+='<g id="n_'+k+'" style="color:'+n.col+'">'
+   +'<path d="'+fArc(n.cx,n.cy,46,135,405)+'" fill="none" stroke="#263241" stroke-width="9" stroke-linecap="round"/>'
+   +'<path id="a_'+k+'" d="" fill="none" stroke="'+n.col+'" stroke-width="9" stroke-linecap="round"/>'
+   +'<g transform="translate('+n.cx+','+(n.cy-12)+')">'+FICON[k]+'</g>'
+   +'<text id="v_'+k+'" x="'+n.cx+'" y="'+(n.cy+17+dy)+'" text-anchor="middle" font-size="17" font-weight="700" style="fill:'+n.col+'">–</text>'
+   +'<text x="'+n.cx+'" y="'+(n.cy+31+dy)+'" text-anchor="middle" font-size="10" style="fill:#8b98a5">кВт</text>'
+   +'<text x="'+(n.cx-36)+'" y="'+(n.cy+56)+'" text-anchor="middle" font-size="9" style="fill:#8b98a5">0</text>'
+   +'<text id="e_'+k+'" x="'+(n.cx+38)+'" y="'+(n.cy+56)+'" text-anchor="middle" font-size="9" style="fill:#8b98a5">'+(FLOW_MAX/1000).toFixed(1)+' кВт</text>'
+   +'<text x="'+n.cx+'" y="'+(n.cy+75)+'" text-anchor="middle" font-size="13" style="fill:#e6edf3">'+n.name+'</text>'
+   +'<text id="s_'+k+'" x="'+n.cx+'" y="'+(n.cy+91)+'" text-anchor="middle" font-size="11" style="fill:#8b98a5"></text>'
+   +'<text id="i_'+k+'" x="'+n.cx+'" y="'+(n.cy+108)+'" text-anchor="middle" font-size="13" font-weight="600" style="fill:'+n.col+'"></text>'
+   +(k==='bat'?'<text id="eta_bat" x="'+n.cx+'" y="'+(n.cy+125)+'" text-anchor="middle" font-size="11" style="fill:#8b98a5"></text>':'')+'</g>'}
+ $('flow').innerHTML=h}
+function flowSet(k,w,color,sub,amps){   // w — модуль потужності, Вт (NaN — немає даних)
+ const n=FN[k],ok=!isNaN(w),fr=ok?Math.max(0,Math.min(1,Math.abs(w)/FMAX[k])):0;
+ $('e_'+k).textContent=(FMAX[k]/1000).toFixed(1)+' кВт';
+ $('a_'+k).setAttribute('d',fr>0.004?fArc(n.cx,n.cy,46,135,135+270*fr):'');
+ $('a_'+k).setAttribute('stroke',color);$('v_'+k).style.fill=color;
+ $('v_'+k).textContent=ok?(Math.abs(w)/1000).toFixed(2):'–';
+ $('s_'+k).textContent=sub||'';$('i_'+k).textContent=(typeof amps==='number'&&!isNaN(amps))?amps.toFixed(1)+' А':(amps||'');$('i_'+k).style.fill=color;$('n_'+k).style.opacity=ok?1:.45}
+function flowLine(k,w,color,rev){
+ const el=$('fl_'+k),on=!isNaN(w)&&Math.abs(w)>5,L=el.getTotalLength();
+ const AF=AFR[k];
+ [[1,AF[0]],[2,AF[1]]].forEach(([j,f])=>{const a=$('ar_'+k+j);
+  if(!on){a.style.display='none';return}
+  const p=el.getPointAtLength(L*f),q=el.getPointAtLength(Math.min(L,L*f+2)),r=el.getPointAtLength(Math.max(0,L*f-2));
+  const ang=Math.atan2(q.y-r.y,q.x-r.x)*180/Math.PI+(rev?180:0);
+  a.setAttribute('transform','translate('+p.x.toFixed(1)+','+p.y.toFixed(1)+') rotate('+ang.toFixed(1)+')');
+  a.style.fill=color;a.style.display=''});
+ el.setAttribute('class','fl'+(on?' on':'')+(on&&rev?' rev':''));
+ el.style.stroke=on?color:'';
+ if(on)el.style.animationDuration=(1.8-1.4*Math.min(1,Math.abs(w)/FMAX[k])).toFixed(2)+'s'}
+// погода: Open-Meteo (без ключа), Бровари; оновлення раз на 15 хв
+const WX_CL='<path d="M-15,11 H14 A8.5,8.5 0 0 0 14.5,-6 A12.5,12.5 0 0 0 -9,-4 A8.5,8.5 0 0 0 -15,11 Z" fill="#9fb0c0"/>';
+const WX_SUN='<circle r="8" fill="#f5c542"/><g stroke="#f5c542" stroke-width="2.4" stroke-linecap="round"><path d="M0,-13V-17M0,13V17M-13,0H-17M13,0H17M-9.2,-9.2L-12,-12M9.2,9.2L12,12M-9.2,9.2L-12,12M9.2,-9.2L12,-12"/></g>';
+const WX_MOON='<path d="M5,-15 A15,15 0 1 0 15,5 A12,12 0 0 1 5,-15 Z" fill="#cfd8e3"/>';
+function wxIcon(c,day){
+ const B=day?WX_SUN:WX_MOON,sm=function(x){return '<g transform="translate(-6,-6) scale(.62)">'+x+'</g>'};
+ const cl='<g transform="translate(0,2)">'+WX_CL+'</g>';
+ if(c===0||c===1)return B;
+ if(c===2)return sm(B)+'<g transform="translate(5,4) scale(.8)">'+WX_CL+'</g>';
+ if(c===3)return cl;
+ if(c===45||c===48)return '<g stroke="#9fb0c0" stroke-width="3" stroke-linecap="round"><path d="M-14,-8H14M-10,-1H16M-14,6H12M-8,13H10"/></g>';
+ const top='<g transform="translate(0,-4)">'+WX_CL+'</g>';
+ if(c>=71&&c<=77||c===85||c===86)return top+'<g fill="#e6edf3"><circle cx="-8" cy="14" r="2.2"/><circle cx="0" cy="18" r="2.2"/><circle cx="8" cy="14" r="2.2"/></g>';
+ if(c>=95)return top+'<path d="M2,5 L-5,15 H0 L-3,22 L7,11 H1 Z" fill="#f5c542"/>';
+ return top+'<g stroke="#58a6ff" stroke-width="2.4" stroke-linecap="round"><path d="M-8,12 l-2,6 M0,12 l-2,6 M8,12 l-2,6"/></g>'}
+function wxLoad(){
+ fetch('https://api.open-meteo.com/v1/forecast?latitude=50.51&longitude=30.79&current=temperature_2m,weather_code,is_day&timezone=auto')
+ .then(function(r){return r.json()}).then(function(j){const c=j.current;if(!c)return;
+  $('wxI').innerHTML=wxIcon(c.weather_code,c.is_day===1);
+  const t=Math.round(c.temperature_2m);$('wxT').textContent=(t>0?'+':'')+t+'°';$('wx').style.opacity=1})
+ .catch(function(){$('wx').style.opacity=.35})}
+const WD=['нд','пн','вт','ср','чт','пт','сб'];
+function flowClock(){const d=new Date(),e=$('clkT');if(!e)return;
+ e.textContent=pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+ $('clkD').textContent=pad(d.getDate())+'.'+pad(d.getMonth()+1)+'.'+d.getFullYear()+' · '+WD[d.getDay()]}
+function flowRender(){
+ const iOk=fresh(C.invBase+'/out_w',60000),bOk=fresh(C.bmsBase+'/state/voltage');
+ const pv=iOk?num(I('pv_w')):NaN,load=iOk?num(I('out_w')):NaN;
+ const gv=num(I('grid_v')),ghz=num(I('grid_hz')),grid=iOk&&gv>80&&ghz>40;
+ // потужність батареї: + заряд, − розряд (BMS, інакше інвертор)
+ let bw=NaN,ba=NaN;
+ if(bOk){const p=num(B('power')),c=num(B('current'));if(!isNaN(p))bw=p;if(!isNaN(c))ba=Math.abs(c)}
+ if(isNaN(bw)&&iOk){const v=num(I('batt_v')),c=num(I('batt_chg_a')),d=num(I('batt_dis_a'));if(!isNaN(v)&&!isNaN(c)&&!isNaN(d)){bw=(c-d)*v;if(isNaN(ba))ba=Math.abs(c-d)}}
+ // без мережі батарея заряджатись не може, поки навантаження більше за сонце: тоді працює від батареї (потік до інвертора)
+ if(iOk&&!grid&&!isNaN(bw)&&load>(isNaN(pv)?0:pv)+20&&bw>0)bw=-bw;
+ {const nom=num(B('nominal_ah')),vb=num(B('voltage'));FMAX.bat=bOk&&nom>0&&vb>0?nom*vb:FLOW_MAX}
+ const soc=bOk&&!isNaN(num(B('soc')))?num(B('soc')):(iOk?num(I('batt_pct')):NaN);
+ // потужність з мережі інвертор не передає: оцінка = навантаження + заряд батареї − сонце
+ const gw=!iOk?NaN:grid?Math.max(0,load+(isNaN(bw)?0:bw)-(isNaN(pv)?0:pv)):0;
+ flowSet('pv',pv,'#d29922',isNaN(pv)?'':(num(I('pv_v')).toFixed(0)+' В'),iOk?num(I('pv_a')):NaN);
+ flowSet('grid',gw,grid?'#8b98a5':'#f85149',!iOk?'':grid?(gv.toFixed(0)+' В'):'відсутня',grid&&!isNaN(gw)?'≈ '+(gw/gv).toFixed(1)+' А':'');
+ flowSet('load',load,'#58a6ff',isNaN(load)?'':(isNaN(num(I('load_pct')))?'':num(I('load_pct'))+'% навантаження'),iOk&&num(I('out_v'))>0?num(I('out_va'))/num(I('out_v')):NaN);
+ const bc=isNaN(bw)?'#3fb950':bw>=0?'#3fb950':'#f0883e';
+ flowSet('bat',bw,bc,(isNaN(soc)?'':Math.round(soc)+'%')+(isNaN(bw)?'':' · '+(Math.abs(bw)<10?'спокій':bw>0?'заряд':'розряд')),ba);
+ {const e=$('eta_bat'),cu=ema,rm=num(B('remaining_ah')),nm=num(B('nominal_ah'));let t='';
+  if(bOk&&cu!==null&&!isNaN(rm)&&!isNaN(nm)){const f=h=>{if(h>99)return'> 99 год';const m=Math.round(h*60);return Math.floor(m/60)+' год '+pad(m%60)+' хв'};
+   if(cu<-0.3){const us=rm-nm*SOC_MIN/100;t=us<=0?'резерв '+SOC_MIN+'%':'≈ '+f(us/-cu)+' до '+SOC_MIN+'%'}
+   else if(cu>0.3&&nm-rm>0.05)t='≈ '+f((nm-rm)/cu)+' до 100%'}
+  e.textContent=t}
+ // батарея: заповнення іконки і відсоток замість «кВт»
+ const bf=$('bfill');if(bf)bf.setAttribute('width',isNaN(soc)?0:(24.5*Math.max(0,Math.min(100,soc))/100).toFixed(1));
+ // потоки
+ flowLine('pv',pv,'#d29922',false);
+ flowLine('grid',gw,'#8b98a5',false);
+ flowLine('load',load,'#58a6ff',false);
+ flowLine('bat',bw,bc,!isNaN(bw)&&bw>0);        // шлях батарея→інвертор; при заряді — у зворотний бік
+ $('gridX').style.display=iOk&&!grid?'':'none';
+ $('ctrT').textContent=iOk?'ON':'–';$('ctrT').style.fill=iOk?'#3fb950':'#8b98a5';
+ $('ctrM').textContent=iOk?(grid?(pv>20?'Мережа + сонце':'Мережа'):(pv>20?'Сонце + батарея':'Батарея')):'немає даних';
+ $('ctr').setAttribute('opacity',iOk?.35:0);
+ }
 let pend=false;function schedule(){if(pend)return;pend=true;setTimeout(()=>{pend=false;render()},400)}
 
 // ---- MQTT ----
@@ -237,5 +389,5 @@ if(t===C.bmsBase+'/state/current'){const v=parseFloat(s);if(!isNaN(v))ema=ema===
 if(t===C.bmsBase+'/settings'){try{const o=JSON.parse(s);if(o.cell_ovp_mv){lim.ovp=o.cell_ovp_mv;lim.uvp=o.cell_uvp_mv}}catch(e){}}
 schedule()});
 loadGrid();loadSeries();setInterval(loadGrid,60000);setInterval(loadSeries,30000);setInterval(render,5000);
-addEventListener('resize',charts);render();
+addEventListener('resize',charts);flowInit();wxLoad();mqMob.addEventListener('change',function(){flowInit();wxLoad();flowClock();render()});setInterval(wxLoad,900000);render();flowClock();setInterval(flowClock,1000);
 </script></body></html>

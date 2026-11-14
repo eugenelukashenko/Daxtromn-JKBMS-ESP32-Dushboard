@@ -10,6 +10,7 @@
 """
 import json
 import os
+import alerts
 import sqlite3
 import threading
 import time
@@ -43,6 +44,15 @@ SAMPLE_STALE_S = 180
 GAP_S = 30         # перерва в роботі сервісу довша за це не рахується
 KEEP_SAMPLES_DAYS = 40
 KEEP_DAYS = 400
+
+TG_TOKEN = os.environ.get("TG_TOKEN", "")
+TG_CHAT_ID = os.environ.get("TG_CHAT_ID", "")
+# величини для тривог: топік -> ім'я (ті, що не потрапили в TOPICS)
+ALERT_TOPICS = {}
+for _k in alerts.BMS_KINDS:
+    ALERT_TOPICS[BMS_BASE + "/state/" + _k] = _k
+for _k in alerts.INV_KINDS:
+    ALERT_TOPICS[INV_BASE + "/" + _k] = _k
 
 
 # Допустимі діапазони значень BMS. Збиті кадри з UART дають сміття (732 В, 19136 А, SOC 0/122).
@@ -86,6 +96,7 @@ class Accounting:
         self.vals = {}                 # kind -> (значення, час приходу)
         self.last_tick = None
         self.last_sample_min = None
+        self.acc = {}                  # сума й кількість відліків за поточну хвилину
         self.last_state = last_state   # 'on' | 'off' | 'unk' | None
         self.delta = {}                # година -> [є, немає, немає даних] секунди, ще не в БД
         self.events = []               # (ts, state) ще не в БД
@@ -139,18 +150,27 @@ class Accounting:
                 t += seg
             self.last_tick = now
             self._set_state(now, st)
+            # кожну секунду беремо поточні значення; в БД пишемо середнє за хвилину,
+            # щоб короткі ввімкнення навантаження не губилися між відліками
+            cur = self._get("bcur", now, SAMPLE_STALE_S)
+            pw = self._get("bpow", now, SAMPLE_STALE_S)
+            bat = None
+            if cur is not None and pw is not None:      # потужність BMS приходить без знака, знак — зі струму
+                bat = 0.0 if abs(cur) <= 0.05 else (pw if cur > 0 else -pw)
+            for k, x in (("load", self._get("out_w", now, SAMPLE_STALE_S)),
+                         ("pv", self._get("pv_w", now, SAMPLE_STALE_S)), ("bat", bat)):
+                if x is not None:
+                    a = self.acc.setdefault(k, [0.0, 0])
+                    a[0] += x
+                    a[1] += 1
             minute = int(now // 60) * 60
             if self.last_sample_min is None:
                 self.last_sample_min = minute
             elif minute != self.last_sample_min:
                 self.last_sample_min = minute
-                cur = self._get("bcur", now, SAMPLE_STALE_S)
-                pw = self._get("bpow", now, SAMPLE_STALE_S)
-                bat = None
-                if cur is not None and pw is not None:      # потужність BMS приходить без знака, знак — зі струму
-                    bat = 0.0 if abs(cur) <= 0.05 else (pw if cur > 0 else -pw)
-                row = (minute, self._get("soc", now, SAMPLE_STALE_S),
-                       self._get("out_w", now, SAMPLE_STALE_S), self._get("pv_w", now, SAMPLE_STALE_S), bat)
+                avg = {k: v[0] / v[1] for k, v in self.acc.items() if v[1]}
+                self.acc = {}
+                row = (minute, self._get("soc", now, SAMPLE_STALE_S), avg.get("load"), avg.get("pv"), avg.get("bat"))
                 if any(x is not None for x in row[1:]):
                     self.samples.append(row)
 
@@ -276,11 +296,22 @@ def main():
 
     def on_connect(c, userdata, flags, rc):
         print("MQTT підключено, rc =", rc, flush=True)
-        c.subscribe([(t, 0) for t in TOPICS])
+        c.subscribe([(t, 0) for t in set(TOPICS) | set(ALERT_TOPICS)])
 
     plaus = Plausible()
+    al = alerts.Alerts(now=time.time())
+    tg = alerts.Telegram(TG_TOKEN, TG_CHAT_ID, log=lambda m: print(m, flush=True))
+    print('Telegram-тривоги:', 'увімкнено' if tg.enabled else 'вимкнено (немає TG_TOKEN/TG_CHAT_ID)', flush=True)
+    if tg.enabled:
+        tg.send('✅ Колектор запущено, тривоги активні')
 
     def on_message(c, userdata, msg):
+        ak = ALERT_TOPICS.get(msg.topic)
+        if ak:
+            try:
+                al.on_value(ak, float(msg.payload.decode()), time.time())
+            except ValueError:
+                pass
         kind = TOPICS.get(msg.topic)
         if kind:
             try:
@@ -303,6 +334,8 @@ def main():
     n = 0
     while True:
         acc.tick(time.time())
+        for m in al.check(time.time()):
+            tg.send(m)
         n += 1
         if n % 30 == 0:
             flush(acc, db, lock)
